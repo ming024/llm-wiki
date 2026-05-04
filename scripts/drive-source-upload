@@ -1,0 +1,87 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  printf 'Usage: %s raw/<category> <local-file> [title]\n' "$(basename "$0")" >&2
+  printf 'Example: %s raw/papers ./paper.pdf "Paper Title"\n' "$(basename "$0")" >&2
+}
+
+die() {
+  printf 'error: %s\n' "$*" >&2
+  exit 1
+}
+
+slugify() {
+  printf '%s' "$1" |
+    tr '[:upper:]' '[:lower:]' |
+    sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//'
+}
+
+file_size() {
+  stat -f '%z' "$1" 2>/dev/null || stat -c '%s' "$1"
+}
+
+yaml_quote() {
+  printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g; s/^/"/; s/$/"/'
+}
+
+if [ "$#" -lt 2 ] || [ "$#" -gt 3 ]; then
+  usage
+  exit 2
+fi
+
+category="${1%/}"
+local_file="$2"
+title="${3:-}"
+remote="${LLM_WIKI_RCLONE_REMOTE:-gdrive}"
+drive_root="${LLM_WIKI_DRIVE_ROOT:-LLM-Wiki}"
+
+case "$category" in
+  raw/inbox|raw/papers|raw/web|raw/notes|raw/experiments|raw/assets) ;;
+  *) die "category must be one of raw/inbox, raw/papers, raw/web, raw/notes, raw/experiments, raw/assets" ;;
+esac
+
+[ -f "$local_file" ] || die "local file not found: $local_file"
+command -v rclone >/dev/null 2>&1 || die "rclone is not installed or not on PATH"
+
+filename="$(basename "$local_file")"
+base="${filename%.*}"
+slug="$(slugify "$base")"
+[ -n "$slug" ] || die "could not derive a pointer filename from: $filename"
+
+pointer="${category}/${slug}.source.md"
+remote_path="${drive_root}/${category}/${filename}"
+sha256="$(shasum -a 256 "$local_file" | awk '{print $1}')"
+size_bytes="$(file_size "$local_file")"
+content_type="$(file -b --mime-type "$local_file" 2>/dev/null || printf 'application/octet-stream')"
+added="$(date +%F)"
+
+if [ -z "$title" ]; then
+  title="$base"
+fi
+
+[ ! -e "$pointer" ] || die "pointer already exists: $pointer"
+
+rclone copyto "$local_file" "${remote}:${remote_path}"
+
+cat >"$pointer" <<EOF
+---
+title: $(yaml_quote "$title")
+type: external-source
+storage: google-drive
+remote: $(yaml_quote "$remote")
+remote_path: $(yaml_quote "$remote_path")
+original_filename: $(yaml_quote "$filename")
+content_type: $(yaml_quote "$content_type")
+sha256: "${sha256}"
+size_bytes: ${size_bytes}
+added: "${added}"
+---
+
+# ${title}
+
+Source file is stored externally in Google Drive. Use \`scripts/drive-source-fetch ${pointer}\` to restore a local working copy when needed.
+EOF
+
+printf 'Uploaded: %s\n' "${remote}:${remote_path}"
+printf 'Pointer: %s\n' "$pointer"

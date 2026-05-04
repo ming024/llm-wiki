@@ -1,0 +1,27 @@
+# Local external source working copies fetched from Google Drive.
+_external/
+
+# Keep readable sidecar pointers in Git.
+!raw/**/*.source.md
+
+# Large raw source blobs should live in Google Drive and be represented by
+# committed raw/**/*.source.md pointers.
+raw/**/*.pdf
+raw/**/*.zip
+raw/**/*.tar
+raw/**/*.tar.gz
+raw/**/*.tgz
+raw/**/*.7z
+raw/**/*.mp4
+raw/**/*.mov
+raw/**/*.mkv
+raw/**/*.wav
+raw/**/*.mp3
+raw/**/*.png
+raw/**/*.jpg
+raw/**/*.jpeg
+raw/**/*.gif
+raw/**/*.webp
+
+# Preserve placeholder files for empty raw directories.
+!raw/**/.gitkeep

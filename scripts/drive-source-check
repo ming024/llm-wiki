@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+die() {
+  printf 'error: %s\n' "$*" >&2
+  exit 1
+}
+
+frontmatter_value() {
+  awk -v key="$1" '
+    BEGIN { in_fm = 0 }
+    NR == 1 && $0 == "---" { in_fm = 1; next }
+    in_fm && $0 == "---" { exit }
+    in_fm && index($0, key ":") == 1 {
+      value = substr($0, length(key) + 2)
+      sub(/^[[:space:]]+/, "", value)
+      sub(/[[:space:]]+$/, "", value)
+      gsub(/^"|"$/, "", value)
+      print value
+      exit
+    }
+  ' "$2"
+}
+
+remote="${LLM_WIKI_RCLONE_REMOTE:-gdrive}"
+drive_root="${LLM_WIKI_DRIVE_ROOT:-LLM-Wiki}"
+
+command -v rclone >/dev/null 2>&1 || die "rclone is not installed or not on PATH. Install it and configure a Google Drive remote."
+
+if ! rclone lsd "${remote}:" >/dev/null 2>&1; then
+  die "cannot access rclone remote '${remote}:'. Run 'rclone config' or set LLM_WIKI_RCLONE_REMOTE."
+fi
+
+if ! rclone lsf "${remote}:${drive_root}" >/dev/null 2>&1; then
+  printf 'Drive root missing; creating: %s:%s\n' "$remote" "$drive_root"
+  if ! rclone mkdir "${remote}:${drive_root}" >/dev/null 2>&1; then
+    die "cannot create Drive root '${remote}:${drive_root}'. Check remote permissions or set LLM_WIKI_DRIVE_ROOT."
+  fi
+fi
+
+printf 'rclone remote ok: %s:\n' "$remote"
+printf 'Drive root ok: %s:%s\n' "$remote" "$drive_root"
+
+found_any=0
+while IFS= read -r pointer; do
+  found_any=1
+  pointer_remote="$(frontmatter_value remote "$pointer")"
+  remote_path="$(frontmatter_value remote_path "$pointer")"
+
+  [ -n "$pointer_remote" ] || die "missing remote in pointer: $pointer"
+  [ -n "$remote_path" ] || die "missing remote_path in pointer: $pointer"
+
+  remote_dir="$(dirname "$remote_path")"
+  remote_file="$(basename "$remote_path")"
+
+  if ! rclone lsf "${pointer_remote}:${remote_dir}" --files-only | grep -Fxq "$remote_file"; then
+    die "cannot resolve pointer ${pointer}: missing ${pointer_remote}:${remote_path}"
+  fi
+
+  printf 'Pointer ok: %s -> %s:%s\n' "$pointer" "$pointer_remote" "$remote_path"
+done < <(find raw -name '*.source.md' -type f | sort)
+
+if [ "$found_any" -eq 0 ]; then
+  printf 'No raw/**/*.source.md pointers found yet.\n'
+fi

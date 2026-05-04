@@ -1,9 +1,9 @@
 ---
 title: "Index"
 type: overview
-status: seed
+status: active
 created: 2026-05-02
-updated: 2026-05-02
+updated: 2026-05-04
 tags: [index]
 sources: []
 ---
@@ -38,7 +38,7 @@ No method pages have been created yet.
 
 ## Tools
 
-No tool pages have been created yet.
+- [[tools/google-drive-source-storage]] - Workflow for storing large raw sources in Google Drive with `rclone` and committed sidecar pointers.
 
 ## Experiments
 

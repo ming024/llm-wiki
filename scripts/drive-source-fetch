@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  printf 'Usage: %s raw/<category>/<name>.source.md [destination-root]\n' "$(basename "$0")" >&2
+  printf 'Example: %s raw/papers/paper.source.md\n' "$(basename "$0")" >&2
+}
+
+die() {
+  printf 'error: %s\n' "$*" >&2
+  exit 1
+}
+
+frontmatter_value() {
+  awk -v key="$1" '
+    BEGIN { in_fm = 0 }
+    NR == 1 && $0 == "---" { in_fm = 1; next }
+    in_fm && $0 == "---" { exit }
+    in_fm && index($0, key ":") == 1 {
+      value = substr($0, length(key) + 2)
+      sub(/^[[:space:]]+/, "", value)
+      sub(/[[:space:]]+$/, "", value)
+      gsub(/^"|"$/, "", value)
+      print value
+      exit
+    }
+  ' "$2"
+}
+
+if [ "$#" -lt 1 ] || [ "$#" -gt 2 ]; then
+  usage
+  exit 2
+fi
+
+pointer="$1"
+destination_root="${2:-_external}"
+default_drive_root="${LLM_WIKI_DRIVE_ROOT:-LLM-Wiki}"
+
+[ -f "$pointer" ] || die "pointer file not found: $pointer"
+case "$pointer" in
+  raw/*.source.md|raw/*/*.source.md) ;;
+  *) die "pointer should be a raw/**/*.source.md file" ;;
+esac
+
+command -v rclone >/dev/null 2>&1 || die "rclone is not installed or not on PATH"
+
+remote="$(frontmatter_value remote "$pointer")"
+remote_path="$(frontmatter_value remote_path "$pointer")"
+sha256="$(frontmatter_value sha256 "$pointer")"
+
+[ -n "$remote" ] || die "missing remote in pointer: $pointer"
+[ -n "$remote_path" ] || die "missing remote_path in pointer: $pointer"
+
+relative_path="$remote_path"
+case "$relative_path" in
+  "${default_drive_root}/"*) relative_path="${relative_path#${default_drive_root}/}" ;;
+esac
+
+local_path="${destination_root}/${relative_path}"
+mkdir -p "$(dirname "$local_path")"
+
+rclone copyto "${remote}:${remote_path}" "$local_path"
+
+if [ -n "$sha256" ]; then
+  actual_sha256="$(shasum -a 256 "$local_path" | awk '{print $1}')"
+  [ "$actual_sha256" = "$sha256" ] || die "checksum mismatch for $local_path"
+fi
+
+printf 'Fetched: %s\n' "$local_path"

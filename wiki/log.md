@@ -3,7 +3,7 @@ title: "Log"
 type: overview
 status: active
 created: 2026-05-02
-updated: 2026-05-02
+updated: 2026-05-04
 tags: [log]
 sources: []
 ---
@@ -23,3 +23,9 @@ Chronological record of wiki ingests, queries, lint passes, and maintenance.
 - Source: none
 - Updated: `README.md`, `AGENTS.md`, `wiki/index.md`, `wiki/overview.md`
 - Notes: Revised the vault structure for paper digestion, research topics, syntheses, ideas, methods, tools, experiments, projects, entities, and classified raw sources.
+
+## [2026-05-04] maintenance | Google Drive source storage
+
+- Source: none
+- Updated: `README.md`, `AGENTS.md`, `wiki/tools/google-drive-source-storage.md`, `wiki/index.md`, `wiki/log.md`
+- Notes: Added an `rclone`-based workflow for storing large source blobs in Google Drive while tracking sidecar pointers in `raw/`.

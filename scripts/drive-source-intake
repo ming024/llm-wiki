@@ -368,7 +368,7 @@ esac
 mkdir -p "$category"
 
 if is_url "$input"; then
-  existing_pointer="$(existing_pointer_for_source_url "$category" "$input")"
+  existing_pointer="$(existing_pointer_for_source_url "$category" "$input" || true)"
   if [ -n "$existing_pointer" ]; then
     printf 'Pointer: %s\n' "$existing_pointer"
     exit 0

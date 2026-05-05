@@ -67,9 +67,11 @@ The check creates the `LLM-Wiki` folder in Google Drive if it is missing.
 
 This repo includes three project skills under `.cursor/skills/`. You do not need to run them directly; ask the agent in natural language and Cursor will make the relevant skill available.
 
-Use the ingest skill when adding a source:
+Use the ingest skill when adding a source. You can put a source under `raw/`, or use a URL or local path and let the agent classify it for you.
 
 ```text
+Ingest /Users/me/Downloads/paper.pdf into the wiki.
+Ingest https://example.com/article into the wiki.
 Ingest raw/papers/paper.source.md into the wiki.
 ```
 
@@ -90,9 +92,9 @@ Review unintegrated source summaries and suggest topic pages to update.
 
 When a source is ingested or a durable answer is filed, the agent should update `wiki/index.md` and append an entry to `wiki/log.md`.
 
-# External Source Storage
+## External Source Storage
 
-Large source files can live in Google Drive instead of Git. Use `rclone` with a Google Drive remote, keep downloaded working copies under `_external/`, and commit small `*.source.md` pointer files under the appropriate `raw/` category.
+Small text-like files can be committed directly under `raw/`. Larger files and binary/heavy formats live in Google Drive instead of Git, with small `*.source.md` pointers under the appropriate `raw/` category. Downloaded working copies are kept under `_external/` and will not be tracked by Git.
 
 Default configuration:
 
@@ -101,15 +103,7 @@ export LLM_WIKI_RCLONE_REMOTE=gdrive
 export LLM_WIKI_DRIVE_ROOT=LLM-Wiki
 ```
 
-Common commands:
-
-```sh
-scripts/drive-source-check
-scripts/drive-source-upload raw/papers ./paper.pdf "Paper Title"
-scripts/drive-source-fetch raw/papers/paper.source.md
-```
-
-The pointer file records the Drive path, original filename, size, and SHA-256 checksum. The downloaded blob remains ignored by Git.
+Use the ingest skill for normal source intake. It will classify the source, run the intake tooling, and cite either the direct raw file or the generated pointer.
 
 ## Agent Instructions
 

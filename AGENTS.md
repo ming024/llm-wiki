@@ -61,16 +61,18 @@ After the frontmatter, use clear markdown headings. Include a `Sources` section 
 
 When the human asks you to ingest a source:
 
-1. Identify the source path under `raw/inbox/`, `raw/papers/`, `raw/web/`, `raw/notes/`, `raw/experiments/`, or `raw/assets/`.
-2. If the source is a `*.source.md` pointer, fetch the external blob with `scripts/drive-source-fetch` when local content is needed, but cite the pointer file in wiki pages.
-3. Read the source carefully. If it references images or attachments, inspect relevant files under `raw/assets/` when available.
-4. By default, ingest one source at a time. Discusses key takeaways with the human. Ask what the human wants emphasized and what mattered. Summarize the key information before making broad wiki updates.
-5. Create or update a paper digest in `wiki/papers/` for academic papers; otherwise create or update a source summary in `wiki/sources/`.
-6. Extract important topics, syntheses, ideas, methods, tools, experiments, projects, entities, datasets, benchmarks, claims, uncertainties, and contradictions.
-7. Create or update relevant pages in `wiki/topics/`, `wiki/syntheses/`, `wiki/ideas/`, `wiki/methods/`, `wiki/tools/`, `wiki/experiments/`, `wiki/projects/`, and `wiki/entities/`.
-8. Add cross-links between related wiki pages.
-9. Update `wiki/index.md` with new or changed pages.
-10. Append an entry to `wiki/log.md` using the log format below.
+1. Accept a source from a committed `raw/` path, any local filesystem path, or an `http://` or `https://` URL.
+2. If the source is outside `raw/`, classify it into the right `raw/` category and run `scripts/drive-source-intake <raw/category> <path-or-url> [title]`.
+3. Continue from the path reported by intake. `Raw file:` means the source was copied directly into `raw/`; `Pointer:` means the source is represented by a `raw/**/*.source.md` sidecar.
+4. If the source is a Drive-backed `*.source.md` pointer, fetch the external blob with `scripts/drive-source-fetch` when local content is needed, but cite the pointer file in wiki pages.
+5. Read the source carefully. If it references images or attachments, inspect relevant files under `raw/assets/` when available.
+6. By default, ingest one source at a time. Discusses key takeaways with the human. Ask what the human wants emphasized and what mattered. Summarize the key information before making broad wiki updates.
+7. Create or update a paper digest in `wiki/papers/` for academic papers; otherwise create or update a source summary in `wiki/sources/`.
+8. Extract important topics, syntheses, ideas, methods, tools, experiments, projects, entities, datasets, benchmarks, claims, uncertainties, and contradictions.
+9. Create or update relevant pages in `wiki/topics/`, `wiki/syntheses/`, `wiki/ideas/`, `wiki/methods/`, `wiki/tools/`, `wiki/experiments/`, `wiki/projects/`, and `wiki/entities/`.
+10. Add cross-links between related wiki pages.
+11. Update `wiki/index.md` with new or changed pages.
+12. Append an entry to `wiki/log.md` using the log format below.
 
 ## Query Workflow
 

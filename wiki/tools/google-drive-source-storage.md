@@ -10,18 +10,20 @@ sources: []
 
 # Google Drive Source Storage
 
-This workflow keeps large source blobs out of Git while preserving durable, readable source references in the repository.
+This workflow keeps large source blobs out of Git while allowing small text-like source files to stay directly in `raw/`.
 
 ## Model
 
-- Google Drive stores the large source file.
+- Small text-like files at or below 1 MB can be committed directly in `raw/<category>/`.
+- Google Drive stores large files and binary/heavy formats such as PDFs, images, media, archives, and office documents.
 - `_external/` stores ignored local working copies fetched on demand.
-- `raw/**/*.source.md` stores committed sidecar pointers with Drive path, size, checksum, and retrieval instructions.
-- Wiki pages cite the committed pointer file, not `_external/`.
+- `raw/**/*.source.md` stores committed sidecar pointers with Drive path, size, checksum, and retrieval instructions when a file is stored externally.
+- Wiki pages cite either the direct raw file or the committed pointer file, not `_external/`.
 
 Example layout:
 
 ```text
+raw/web/example-article.md
 raw/papers/example-paper.source.md
 _external/raw/papers/example-paper.pdf
 Google Drive/LLM-Wiki/raw/papers/example-paper.pdf
@@ -46,7 +48,16 @@ Check the local setup:
 scripts/drive-source-check
 ```
 
-Upload a source and create a pointer:
+Intake a local file or URL:
+
+```sh
+scripts/drive-source-intake raw/papers ./paper.pdf "Paper Title"
+scripts/drive-source-intake raw/web https://example.com/article "Article Title"
+```
+
+For local files and obvious file URLs, intake first applies the raw storage policy. Small text-like files at or below 1 MB are copied directly into `raw/`. Larger or binary/heavy files upload to Google Drive and get a Drive-backed pointer. Ordinary web pages create a `storage: url` pointer under `raw/web` without uploading content to Drive.
+
+Upload a local source directly when you already know it should be Drive-backed:
 
 ```sh
 scripts/drive-source-upload raw/papers ./paper.pdf "Paper Title"
@@ -60,7 +71,7 @@ scripts/drive-source-fetch raw/papers/paper.source.md
 
 ## Pointer Format
 
-Each pointer is a small markdown file with YAML frontmatter:
+Drive-backed pointers are small markdown files with YAML frontmatter:
 
 ```markdown
 ---
@@ -79,6 +90,22 @@ added: 2026-05-04
 # Example Paper
 
 Source file is stored externally in Google Drive. Use `scripts/drive-source-fetch` to restore a local working copy when needed.
+```
+
+Ordinary web URL pointers use `storage: url`:
+
+```markdown
+---
+title: "Example Article"
+type: external-source
+storage: url
+source_url: "https://example.com/article"
+added: "2026-05-04"
+---
+
+# Example Article
+
+Source is stored as a URL pointer. Use the `source_url` above when the page content needs to be consulted.
 ```
 
 ## Notes

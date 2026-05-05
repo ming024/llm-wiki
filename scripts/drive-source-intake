@@ -1,0 +1,330 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  printf 'Usage: %s raw/<category> <path-or-url> [title]\n' "$(basename "$0")" >&2
+  printf 'Example: %s raw/papers ./paper.pdf "Paper Title"\n' "$(basename "$0")" >&2
+  printf 'Example: %s raw/web https://example.com/article "Article Title"\n' "$(basename "$0")" >&2
+}
+
+die() {
+  printf 'error: %s\n' "$*" >&2
+  exit 1
+}
+
+slugify() {
+  printf '%s' "$1" |
+    tr '[:upper:]' '[:lower:]' |
+    sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//'
+}
+
+yaml_quote() {
+  printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g; s/^/"/; s/$/"/'
+}
+
+file_size() {
+  stat -f '%z' "$1" 2>/dev/null || stat -c '%s' "$1"
+}
+
+file_mime_type() {
+  file -b --mime-type "$1" 2>/dev/null || printf 'application/octet-stream'
+}
+
+file_extension() {
+  name="$(basename "$1")"
+  case "$name" in
+    *.*) printf '%s' ".${name##*.}" | tr '[:upper:]' '[:lower:]' ;;
+    *) printf '' ;;
+  esac
+}
+
+is_url() {
+  case "$1" in
+    http://*|https://*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+url_without_query() {
+  printf '%s' "$1" | sed -E 's/[?#].*$//'
+}
+
+url_host() {
+  printf '%s' "$1" | sed -E 's#^[a-zA-Z][a-zA-Z0-9+.-]*://([^/?#]+).*#\1#'
+}
+
+url_basename() {
+  clean_url="$(url_without_query "$1")"
+  base="$(basename "$clean_url")"
+  if [ -n "$base" ] && [ "$base" != "/" ] && [ "$base" != "." ]; then
+    printf '%s' "$base"
+  else
+    printf '%s' "$(url_host "$1")"
+  fi
+}
+
+url_slug_source() {
+  printf '%s' "$(url_host "$1")-$(url_basename "$1")"
+}
+
+content_type_from_url() {
+  curl -fsSLI "$1" 2>/dev/null |
+    awk 'BEGIN { IGNORECASE = 1 } /^content-type:/ { print $2; exit }' |
+    tr -d '\r' |
+    sed -E 's/;.*$//'
+}
+
+is_obvious_file_url() {
+  clean_url="$(url_without_query "$1")"
+  case "$clean_url" in
+    *.pdf|*.PDF|*.zip|*.ZIP|*.tar|*.tar.gz|*.tgz|*.7z|*.mp4|*.mov|*.mkv|*.wav|*.mp3|*.png|*.jpg|*.jpeg|*.gif|*.webp|*.txt|*.md|*.json|*.csv|*.bib)
+      return 0
+      ;;
+  esac
+
+  content_type="$(content_type_from_url "$1")"
+  case "$content_type" in
+    application/pdf|application/zip|application/x-tar|application/gzip|application/x-7z-compressed|image/*|audio/*|video/*|text/plain|text/markdown|application/json|text/csv|application/x-bibtex)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+next_pointer_path() {
+  category="$1"
+  slug="$2"
+  pointer="${category}/${slug}.source.md"
+  if [ ! -e "$pointer" ]; then
+    printf '%s' "$pointer"
+    return
+  fi
+
+  index=2
+  while [ -e "${category}/${slug}-${index}.source.md" ]; do
+    index=$((index + 1))
+  done
+  printf '%s' "${category}/${slug}-${index}.source.md"
+}
+
+next_raw_path() {
+  category="$1"
+  filename="$2"
+  destination="${category}/${filename}"
+  if [ ! -e "$destination" ]; then
+    printf '%s' "$destination"
+    return
+  fi
+
+  extension=""
+  stem="$filename"
+  case "$filename" in
+    *.*)
+      extension=".${filename##*.}"
+      stem="${filename%.*}"
+      ;;
+  esac
+
+  index=2
+  while [ -e "${category}/${stem}-${index}${extension}" ]; do
+    index=$((index + 1))
+  done
+  printf '%s' "${category}/${stem}-${index}${extension}"
+}
+
+is_text_like_file() {
+  local_file="$1"
+  content_type="$(file_mime_type "$local_file")"
+  extension="$(file_extension "$local_file")"
+
+  case "$content_type" in
+    text/*|application/json|application/x-ndjson|application/xml|application/yaml|application/x-yaml|text/yaml|text/xml|application/x-bibtex)
+      return 0
+      ;;
+  esac
+
+  case "$extension" in
+    .txt|.md|.markdown|.html|.htm|.json|.jsonl|.csv|.tsv|.yaml|.yml|.bib|.ris|.xml|.tex|.log|.org|.rst|.adoc|.py|.js|.ts|.tsx|.jsx|.css|.scss|.sh|.zsh|.bash|.toml|.ini|.cfg|.conf)
+      return 0
+      ;;
+  esac
+
+  return 1
+}
+
+should_store_direct_raw() {
+  local_file="$1"
+  max_bytes="${LLM_WIKI_DIRECT_RAW_MAX_BYTES:-1048576}"
+  size_bytes="$(file_size "$local_file")"
+
+  [ "$size_bytes" -le "$max_bytes" ] || return 1
+  is_text_like_file "$local_file"
+}
+
+copy_direct_raw() {
+  category="$1"
+  local_file="$2"
+
+  filename="$(basename "$local_file")"
+  destination="$(next_raw_path "$category" "$filename")"
+  cp "$local_file" "$destination"
+  printf 'Raw file: %s\n' "$destination"
+}
+
+write_drive_pointer() {
+  pointer="$1"
+  title="$2"
+  remote="$3"
+  remote_path="$4"
+  filename="$5"
+  content_type="$6"
+  sha256="$7"
+  size_bytes="$8"
+  added="$9"
+  source_url="${10:-}"
+
+  {
+    printf '%s\n' '---'
+    printf 'title: %s\n' "$(yaml_quote "$title")"
+    printf '%s\n' 'type: external-source'
+    printf '%s\n' 'storage: google-drive'
+    printf 'remote: %s\n' "$(yaml_quote "$remote")"
+    printf 'remote_path: %s\n' "$(yaml_quote "$remote_path")"
+    printf 'original_filename: %s\n' "$(yaml_quote "$filename")"
+    printf 'content_type: %s\n' "$(yaml_quote "$content_type")"
+    printf 'sha256: "%s"\n' "$sha256"
+    printf 'size_bytes: %s\n' "$size_bytes"
+    printf 'added: "%s"\n' "$added"
+    if [ -n "$source_url" ]; then
+      printf 'source_url: %s\n' "$(yaml_quote "$source_url")"
+    fi
+    printf '%s\n\n' '---'
+    printf '# %s\n\n' "$title"
+    printf 'Source file is stored externally in Google Drive. Use `%s %s` to restore a local working copy when needed.\n' "scripts/drive-source-fetch" "$pointer"
+  } >"$pointer"
+}
+
+write_url_pointer() {
+  pointer="$1"
+  title="$2"
+  source_url="$3"
+  added="$4"
+
+  {
+    printf '%s\n' '---'
+    printf 'title: %s\n' "$(yaml_quote "$title")"
+    printf '%s\n' 'type: external-source'
+    printf '%s\n' 'storage: url'
+    printf 'source_url: %s\n' "$(yaml_quote "$source_url")"
+    printf 'added: "%s"\n' "$added"
+    printf '%s\n\n' '---'
+    printf '# %s\n\n' "$title"
+    printf 'Source is stored as a URL pointer. Use the `source_url` above when the page content needs to be consulted.\n'
+  } >"$pointer"
+}
+
+upload_blob() {
+  category="$1"
+  local_file="$2"
+  title="$3"
+  source_url="${4:-}"
+
+  remote="${LLM_WIKI_RCLONE_REMOTE:-gdrive}"
+  drive_root="${LLM_WIKI_DRIVE_ROOT:-LLM-Wiki}"
+
+  command -v rclone >/dev/null 2>&1 || die "rclone is not installed or not on PATH"
+  [ -f "$local_file" ] || die "local file not found: $local_file"
+
+  filename="$(basename "$local_file")"
+  base="${filename%.*}"
+  slug="$(slugify "$base")"
+  [ -n "$slug" ] || die "could not derive a pointer filename from: $filename"
+
+  if [ -z "$title" ]; then
+    title="$base"
+  fi
+
+  pointer="$(next_pointer_path "$category" "$slug")"
+  remote_path="${drive_root}/${category}/${filename}"
+  sha256="$(shasum -a 256 "$local_file" | awk '{print $1}')"
+  size_bytes="$(file_size "$local_file")"
+  content_type="$(file_mime_type "$local_file")"
+  added="$(date +%F)"
+
+  rclone copyto "$local_file" "${remote}:${remote_path}"
+  write_drive_pointer "$pointer" "$title" "$remote" "$remote_path" "$filename" "$content_type" "$sha256" "$size_bytes" "$added" "$source_url"
+
+  printf 'Uploaded: %s\n' "${remote}:${remote_path}"
+  printf 'Pointer: %s\n' "$pointer"
+}
+
+store_file_source() {
+  category="$1"
+  local_file="$2"
+  title="$3"
+  source_url="${4:-}"
+
+  [ -f "$local_file" ] || die "local file not found: $local_file"
+
+  if should_store_direct_raw "$local_file"; then
+    copy_direct_raw "$category" "$local_file"
+  else
+    upload_blob "$category" "$local_file" "$title" "$source_url"
+  fi
+}
+
+if [ "$#" -lt 2 ] || [ "$#" -gt 3 ]; then
+  usage
+  exit 2
+fi
+
+category="${1%/}"
+input="$2"
+title="${3:-}"
+
+case "$category" in
+  raw/inbox|raw/papers|raw/web|raw/notes|raw/experiments|raw/assets) ;;
+  *) die "category must be one of raw/inbox, raw/papers, raw/web, raw/notes, raw/experiments, raw/assets" ;;
+esac
+
+mkdir -p "$category"
+
+if is_url "$input"; then
+  if is_obvious_file_url "$input"; then
+    command -v curl >/dev/null 2>&1 || die "curl is not installed or not on PATH"
+    temp_dir="$(mktemp -d)"
+    trap 'rm -rf "$temp_dir"' EXIT
+    filename="$(url_basename "$input")"
+    slug="$(slugify "${filename%.*}")"
+    [ -n "$slug" ] || slug="downloaded-source"
+    temp_file="${temp_dir}/${filename}"
+    curl -fL --retry 2 -o "$temp_file" "$input"
+    store_file_source "$category" "$temp_file" "$title" "$input"
+  else
+    if [ "$category" != "raw/web" ]; then
+      printf 'Ordinary web URL detected; using raw/web for URL pointer.\n'
+      category="raw/web"
+      mkdir -p "$category"
+    fi
+    slug="$(slugify "$(url_slug_source "$input")")"
+    [ -n "$slug" ] || slug="web-source"
+    pointer="$(next_pointer_path "$category" "$slug")"
+    if [ -z "$title" ]; then
+      title="$(url_basename "$input")"
+    fi
+    write_url_pointer "$pointer" "$title" "$input" "$(date +%F)"
+    printf 'Pointer: %s\n' "$pointer"
+  fi
+else
+  case "$input" in
+    raw/*)
+      [ -f "$input" ] || die "raw file not found: $input"
+      printf 'Raw file: %s\n' "$input"
+      ;;
+    *)
+      store_file_source "$category" "$input" "$title"
+      ;;
+  esac
+fi

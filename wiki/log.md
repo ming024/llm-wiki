@@ -29,3 +29,15 @@ Chronological record of wiki ingests, queries, lint passes, and maintenance.
 - Source: none
 - Updated: `README.md`, `AGENTS.md`, `wiki/tools/google-drive-source-storage.md`, `wiki/index.md`, `wiki/log.md`
 - Notes: Added an `rclone`-based workflow for storing large source blobs in Google Drive while tracking sidecar pointers in `raw/`.
+
+## [2026-05-04] maintenance | Automatic source intake
+
+- Source: none
+- Updated: `.cursor/skills/llm-wiki-ingest/SKILL.md`, `scripts/drive-source-intake`, `README.md`, `AGENTS.md`, `wiki/tools/google-drive-source-storage.md`, `wiki/log.md`
+- Notes: Added agent-driven intake for arbitrary local paths and URLs with automatic sidecar creation.
+
+## [2026-05-04] maintenance | Raw file storage policy
+
+- Source: none
+- Updated: `scripts/drive-source-intake`, `.cursor/skills/llm-wiki-ingest/SKILL.md`, `README.md`, `AGENTS.md`, `wiki/tools/google-drive-source-storage.md`, `wiki/log.md`
+- Notes: Added a type-and-size policy so small text-like files stay directly in `raw/` while large or binary files use Drive-backed sidecars.

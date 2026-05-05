@@ -41,3 +41,9 @@ Chronological record of wiki ingests, queries, lint passes, and maintenance.
 - Source: none
 - Updated: `scripts/drive-source-intake`, `.cursor/skills/llm-wiki-ingest/SKILL.md`, `README.md`, `AGENTS.md`, `wiki/tools/google-drive-source-storage.md`, `wiki/log.md`
 - Notes: Added a type-and-size policy so small text-like files stay directly in `raw/` while large or binary files use Drive-backed sidecars.
+
+## [2026-05-04] maintenance | Ingest checkpoint requirement
+
+- Source: none
+- Updated: `.cursor/skills/llm-wiki-ingest/SKILL.md`, `AGENTS.md`, `wiki/log.md`
+- Notes: Made the human discussion checkpoint mandatory before durable wiki edits during source ingest.

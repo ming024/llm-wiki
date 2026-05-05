@@ -67,11 +67,39 @@ url_slug_source() {
   printf '%s' "$(url_host "$1")-$(url_basename "$1")"
 }
 
+url_query_id() {
+  printf '%s' "$1" | sed -nE 's/.*[?&]id=([^&#]+).*/\1/p' | head -n 1
+}
+
 content_type_from_url() {
   curl -fsSLI "$1" 2>/dev/null |
     awk 'BEGIN { IGNORECASE = 1 } /^content-type:/ { print $2; exit }' |
     tr -d '\r' |
     sed -E 's/;.*$//'
+}
+
+extension_from_content_type() {
+  case "$1" in
+    application/pdf) printf '.pdf' ;;
+    application/zip) printf '.zip' ;;
+    application/x-tar) printf '.tar' ;;
+    application/gzip) printf '.gz' ;;
+    application/x-7z-compressed) printf '.7z' ;;
+    image/png) printf '.png' ;;
+    image/jpeg) printf '.jpg' ;;
+    image/gif) printf '.gif' ;;
+    image/webp) printf '.webp' ;;
+    audio/mpeg) printf '.mp3' ;;
+    audio/wav|audio/x-wav) printf '.wav' ;;
+    video/mp4) printf '.mp4' ;;
+    video/quicktime) printf '.mov' ;;
+    text/plain) printf '.txt' ;;
+    text/markdown) printf '.md' ;;
+    application/json) printf '.json' ;;
+    text/csv) printf '.csv' ;;
+    application/x-bibtex) printf '.bib' ;;
+    *) printf '' ;;
+  esac
 }
 
 is_obvious_file_url() {
@@ -90,6 +118,38 @@ is_obvious_file_url() {
     *)
       return 1
       ;;
+  esac
+}
+
+download_filename_for_url() {
+  url="$1"
+  title="$2"
+  content_type="$3"
+
+  extension="$(extension_from_content_type "$content_type")"
+  if [ -n "$title" ]; then
+    stem="$(slugify "$title")"
+  else
+    basename_value="$(url_basename "$url")"
+    case "$basename_value" in
+      pdf|download|file|source|view)
+        query_id="$(url_query_id "$url")"
+        if [ -n "$query_id" ]; then
+          stem="$(slugify "$(url_host "$url")-$query_id")"
+        else
+          stem="$(slugify "$(url_slug_source "$url")")"
+        fi
+        ;;
+      *)
+        stem="$(slugify "${basename_value%.*}")"
+        ;;
+    esac
+  fi
+
+  [ -n "$stem" ] || stem="downloaded-source"
+  case "$stem" in
+    *.*) printf '%s' "$stem" ;;
+    *) printf '%s%s' "$stem" "$extension" ;;
   esac
 }
 
@@ -132,6 +192,22 @@ next_raw_path() {
     index=$((index + 1))
   done
   printf '%s' "${category}/${stem}-${index}${extension}"
+}
+
+existing_pointer_for_source_url() {
+  category="$1"
+  source_url="$2"
+
+  [ -d "$category" ] || return 1
+  for pointer in "$category"/*.source.md; do
+    [ -e "$pointer" ] || return 1
+    value="$(sed -nE 's/^source_url:[[:space:]]*"?([^"]*)"?[[:space:]]*$/\1/p' "$pointer" | head -n 1)"
+    if [ "$value" = "$source_url" ]; then
+      printf '%s\n' "$pointer"
+      return 0
+    fi
+  done
+  return 1
 }
 
 is_text_like_file() {
@@ -292,13 +368,18 @@ esac
 mkdir -p "$category"
 
 if is_url "$input"; then
+  existing_pointer="$(existing_pointer_for_source_url "$category" "$input")"
+  if [ -n "$existing_pointer" ]; then
+    printf 'Pointer: %s\n' "$existing_pointer"
+    exit 0
+  fi
+
   if is_obvious_file_url "$input"; then
     command -v curl >/dev/null 2>&1 || die "curl is not installed or not on PATH"
     temp_dir="$(mktemp -d)"
     trap 'rm -rf "$temp_dir"' EXIT
-    filename="$(url_basename "$input")"
-    slug="$(slugify "${filename%.*}")"
-    [ -n "$slug" ] || slug="downloaded-source"
+    content_type="$(content_type_from_url "$input")"
+    filename="$(download_filename_for_url "$input" "$title" "$content_type")"
     temp_file="${temp_dir}/${filename}"
     curl -fL --retry 2 -o "$temp_file" "$input"
     store_file_source "$category" "$temp_file" "$title" "$input"

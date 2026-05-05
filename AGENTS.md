@@ -66,13 +66,14 @@ When the human asks you to ingest a source:
 3. Continue from the path reported by intake. `Raw file:` means the source was copied directly into `raw/`; `Pointer:` means the source is represented by a `raw/**/*.source.md` sidecar.
 4. If the source is a Drive-backed `*.source.md` pointer, fetch the external blob with `scripts/drive-source-fetch` when local content is needed, but cite the pointer file in wiki pages.
 5. Read the source carefully. If it references images or attachments, inspect relevant files under `raw/assets/` when available.
-6. By default, ingest one source at a time. Discusses key takeaways with the human. Ask what the human wants emphasized and what mattered. Summarize the key information before making broad wiki updates.
-7. Create or update a paper digest in `wiki/papers/` for academic papers; otherwise create or update a source summary in `wiki/sources/`.
-8. Extract important topics, syntheses, ideas, methods, tools, experiments, projects, entities, datasets, benchmarks, claims, uncertainties, and contradictions.
-9. Create or update relevant pages in `wiki/topics/`, `wiki/syntheses/`, `wiki/ideas/`, `wiki/methods/`, `wiki/tools/`, `wiki/experiments/`, `wiki/projects/`, and `wiki/entities/`.
-10. Add cross-links between related wiki pages.
-11. Update `wiki/index.md` with new or changed pages.
-12. Append an entry to `wiki/log.md` using the log format below.
+6. Stop for a mandatory human checkpoint before writing or updating wiki pages. Report the source path, source type, key takeaways, likely wiki pages to create or update, and ask what the human wants emphasized or what mattered.
+7. Wait for the human response. Do not create or update `wiki/` pages, `wiki/index.md`, or `wiki/log.md` before this response.
+8. Create or update a paper digest in `wiki/papers/` for academic papers; otherwise create or update a source summary in `wiki/sources/`.
+9. Extract important topics, syntheses, ideas, methods, tools, experiments, projects, entities, datasets, benchmarks, claims, uncertainties, and contradictions.
+10. Create or update relevant pages in `wiki/topics/`, `wiki/syntheses/`, `wiki/ideas/`, `wiki/methods/`, `wiki/tools/`, `wiki/experiments/`, `wiki/projects/`, and `wiki/entities/`.
+11. Add cross-links between related wiki pages.
+12. Update `wiki/index.md` with new or changed pages.
+13. Append an entry to `wiki/log.md` using the log format below.
 
 ## Query Workflow
 

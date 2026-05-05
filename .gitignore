@@ -25,3 +25,6 @@ raw/**/*.webp
 
 # Preserve placeholder files for empty raw directories.
 !raw/**/.gitkeep
+
+# Obsidian
+.obsidian
